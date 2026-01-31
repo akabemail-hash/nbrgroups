@@ -13,7 +13,7 @@ const Logo = ({ className }: { className?: string }) => {
     return <img src={logoUrl} alt="App Logo" className={className} style={{ objectFit: 'contain' }} />;
   }
 
-  return <img src="https://iili.io/fN2Cwtp.png" alt="App Logo" className={className} style={{ objectFit: 'contain' }} />;
+  return <img src="https://i.postimg.cc/Ls9XwG54/logo-son-02.png" alt="App Logo" className={className} style={{ objectFit: 'contain' }} />;
 };
 
 
