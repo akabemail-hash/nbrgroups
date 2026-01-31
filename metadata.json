@@ -1,0 +1,7 @@
+{
+  "name": "calisan Customer Centric Management System",
+  "description": "A comprehensive system for managing users, roles, and permissions with multi-language support and geolocation features, built on Supabase.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
