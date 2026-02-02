@@ -15,7 +15,7 @@ export default {
   "dashboard.kpi.monthAssets": "Aylıq Varlıq Təchizatları",
   "dashboard.kpi.issued": "Verildi",
   "dashboard.kpi.completed": "Tamamlandı",
-  "dashboard.kpi.pending": "Gözləmədə",
+  "dashboard.kpi.pending": "Gözləmədə", 
   "dashboard.kpi.totalDeliveries": "Cəmi Təchizat",
   "dashboard.quickActions.title": "Cəld Əməliyyatlar",
   "dashboard.quickActions.userManagement.title": "İstifadəçi İdarəetməsi",
