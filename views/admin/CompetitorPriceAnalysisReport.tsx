@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
 import { CompetitorPriceAnalysis, Product, Customer, Seller, ProductGroup } from '../../types';
-import { Loader2, ChevronLeft, ChevronRight, X, Image as ImageIcon, CheckSquare, Square, ChevronDown } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, X, Image as ImageIcon, CheckSquare, Square, ChevronDown, Search } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -40,7 +40,6 @@ const ReportCard: React.FC<{ report: CompetitorPriceAnalysis; onImageClick: (url
                             {report.items?.map(item => (
                                 <tr key={item.id} className="border-b border-border dark:border-dark-border last:border-b-0">
                                     <td className="py-2">{item.product?.name}</td>
-                                    {/* Use stored product_price if available (historical), otherwise fallback to current catalog price */}
                                     <td className="py-2 text-center">
                                         {(item.product_price !== undefined && item.product_price !== null) 
                                             ? item.product_price.toFixed(2) 
@@ -68,8 +67,12 @@ const MultiSelectDropdown: React.FC<{
     selectedIds: Set<string>;
     onChange: (id: string) => void;
     label: string;
-}> = ({ options, selectedIds, onChange, label }) => {
+    isSearchable?: boolean;
+    placeholder?: string;
+}> = ({ options, selectedIds, onChange, label, isSearchable = false, placeholder = 'Select options' }) => {
+    const { t } = useAppContext();
     const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -83,38 +86,69 @@ const MultiSelectDropdown: React.FC<{
     }, []);
 
     const selectedCount = selectedIds.size;
+    
+    const filteredOptions = useMemo(() => {
+        if (!isSearchable || !searchTerm) return options;
+        const term = searchTerm.toLowerCase();
+        return options.filter(o => o.name.toLowerCase().includes(term));
+    }, [options, searchTerm, isSearchable]);
 
     return (
         <div className="relative" ref={dropdownRef}>
             <label className="block text-sm font-medium mb-1">{label}</label>
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-left flex justify-between items-center text-sm focus:ring-primary focus:border-primary"
+                className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-left flex justify-between items-center text-sm focus:ring-2 focus:ring-primary transition-all"
             >
                 <span className="truncate">
-                    {selectedCount === 0 ? 'All Groups' : `${selectedCount} Selected`}
+                    {selectedCount === 0 ? placeholder : `${selectedCount} Selected`}
                 </span>
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             
             {isOpen && (
-                <div className="absolute z-10 w-full bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md mt-1 max-h-60 overflow-y-auto shadow-lg p-2">
-                    {options.map(option => (
-                        <div
-                            key={option.id}
-                            onClick={() => onChange(option.id)}
-                            className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded-md"
-                        >
-                            {selectedIds.has(option.id) ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-gray-400" />}
-                            <span className="text-sm truncate">{option.name}</span>
+                <div className="absolute z-10 w-full bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md mt-1 max-h-60 overflow-hidden shadow-lg flex flex-col">
+                    {isSearchable && (
+                        <div className="p-2 border-b border-border dark:border-dark-border bg-gray-50 dark:bg-gray-800">
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    className="w-full pl-8 pr-2 py-1 text-sm bg-white dark:bg-gray-900 border border-border dark:border-dark-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder={t('relations.searchPlaceholder')}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
                         </div>
-                    ))}
+                    )}
+                    <div className="overflow-y-auto p-2">
+                        {filteredOptions.length === 0 ? (
+                            <div className="p-2 text-sm text-text-secondary italic">No options found</div>
+                        ) : (
+                            filteredOptions.map(option => (
+                                <div
+                                    key={option.id}
+                                    onClick={() => onChange(option.id)}
+                                    className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded-md"
+                                >
+                                    {selectedIds.has(option.id) ? (
+                                        <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+                                    ) : (
+                                        <Square className="h-4 w-4 text-gray-400 shrink-0" />
+                                    )}
+                                    <span className="text-sm truncate text-text-primary dark:text-dark-text-primary">{option.name}</span>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             )}
         </div>
     );
 };
-
 
 const CompetitorPriceAnalysisReport: React.FC = () => {
     const { t, permissions, showNotification } = useAppContext();
@@ -129,7 +163,14 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [viewingImage, setViewingImage] = useState<string | null>(null);
 
-    const initialFilters = { startDate: '', endDate: '', customerId: '', sellerId: '', productIds: new Set<string>(), groupIds: new Set<string>() };
+    const initialFilters = { 
+        startDate: '', 
+        endDate: '', 
+        customerIds: new Set<string>(), 
+        sellerId: '', 
+        productIds: new Set<string>(), 
+        groupIds: new Set<string>() 
+    };
     const [filters, setFilters] = useState(initialFilters);
     
     const fetchDropdownData = useCallback(async () => {
@@ -161,11 +202,14 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
             
             if (currentFilters.startDate) analysisIdsQuery = analysisIdsQuery.gte('analysis_date', `${currentFilters.startDate}T00:00:00.000Z`);
             if (currentFilters.endDate) analysisIdsQuery = analysisIdsQuery.lte('analysis_date', `${currentFilters.endDate}T23:59:59.999Z`);
-            if (currentFilters.customerId) analysisIdsQuery = analysisIdsQuery.eq('customer_id', currentFilters.customerId);
+            
+            // Multiple Customer Filter
+            if (currentFilters.customerIds.size > 0) {
+                analysisIdsQuery = analysisIdsQuery.in('customer_id', Array.from(currentFilters.customerIds));
+            }
             
             // Filter by seller (Sales Representative)
             if (currentFilters.sellerId) {
-                // Find the user_id corresponding to the seller_id
                 const selectedSeller = sellers.find(s => s.id === currentFilters.sellerId);
                 if (selectedSeller && selectedSeller.user_id) {
                     analysisIdsQuery = analysisIdsQuery.eq('created_by', selectedSeller.user_id);
@@ -219,7 +263,6 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
     
     useEffect(() => { fetchDropdownData(); }, [fetchDropdownData]);
     
-    // Only fetch reports when we have sellers loaded (to handle the user_id lookup correctly) or if filter is empty
     useEffect(() => { 
         if(sellers.length > 0 || !filters.sellerId) {
             fetchReports(currentPage, filters); 
@@ -232,6 +275,7 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
     };
 
     const handleProductFilterChange = (productId: string) => {
+        if (!productId) return;
         const newSet = new Set(filters.productIds);
         if (newSet.has(productId)) newSet.delete(productId);
         else newSet.add(productId);
@@ -239,11 +283,19 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
     };
 
     const handleGroupFilterChange = (groupId: string) => {
+        if (!groupId) return;
         const newSet = new Set(filters.groupIds);
         if (newSet.has(groupId)) newSet.delete(groupId);
         else newSet.add(groupId);
-        setFilters(prev => ({ ...prev, groupIds: newSet }));
-        setCurrentPage(1);
+        handleFilterChange('groupIds', newSet);
+    };
+
+    const handleCustomerFilterChange = (customerId: string) => {
+        if (!customerId) return;
+        const newSet = new Set(filters.customerIds);
+        if (newSet.has(customerId)) newSet.delete(customerId);
+        else newSet.add(customerId);
+        handleFilterChange('customerIds', newSet);
     };
     
     const handleResetFilters = () => {
@@ -268,17 +320,20 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-1">{t('competitorPriceAnalysisReport.filters.salesRep')}</label>
-                        <select value={filters.sellerId} onChange={e => handleFilterChange('sellerId', e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm">
+                        <select value={filters.sellerId} onChange={e => handleFilterChange('sellerId', e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm focus:ring-2 focus:ring-primary">
                             <option value="">{t('visitRequestReport.filters.all')}</option>
                             {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1">{t('reportProblem.customer')}</label>
-                        <select value={filters.customerId} onChange={e => handleFilterChange('customerId', e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm">
-                            <option value="">{t('visitRequestReport.filters.all')}</option>
-                            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        <MultiSelectDropdown 
+                            options={customers}
+                            selectedIds={filters.customerIds}
+                            onChange={handleCustomerFilterChange}
+                            label={t('reportProblem.customer')}
+                            isSearchable={true}
+                            placeholder="All Customers"
+                        />
                     </div>
                     <div>
                         <MultiSelectDropdown 
@@ -286,15 +341,15 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
                             selectedIds={filters.groupIds}
                             onChange={handleGroupFilterChange}
                             label={t('sidebar.productGroups')}
+                            placeholder="All Groups"
                         />
                     </div>
                 </div>
                 
-                {/* Product Filter Row */}
                 <div className="grid grid-cols-1">
                     <div>
                         <label className="block text-sm font-medium mb-1">{t('competitorPriceAnalysis.product')}</label>
-                        <select onChange={e => handleProductFilterChange(e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm">
+                        <select onChange={e => handleProductFilterChange(e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm focus:ring-2 focus:ring-primary">
                             <option value="">{t('competitorPriceAnalysisReport.filters.selectProduct')}</option>
                             {allProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
@@ -313,7 +368,7 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
                 </div>
 
                 <div className="flex justify-end gap-2">
-                    <button onClick={handleResetFilters} className="px-4 py-2 text-sm font-medium rounded-md border border-border dark:border-dark-border hover:bg-gray-100 dark:hover:bg-gray-800">{t('visitRequestReport.filters.reset')}</button>
+                    <button onClick={handleResetFilters} className="px-4 py-2 text-sm font-medium rounded-md border border-border dark:border-dark-border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('visitRequestReport.filters.reset')}</button>
                 </div>
             </div>
 
@@ -328,8 +383,8 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
                          <div className="flex items-center justify-between p-4">
                             <span className="text-sm text-text-secondary">{t('pagination.page').replace('{currentPage}', String(currentPage)).replace('{totalPages}', String(totalPages))} ({totalCount} {t('common.results')})</span>
                             <div className="flex items-center gap-2">
-                                <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} className="p-2 rounded-md border disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
-                                <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md border disabled:opacity-50"><ChevronRight className="h-4 w-4" /></button>
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 text-sm rounded-md border border-border dark:border-dark-border disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 text-sm rounded-md border border-border dark:border-dark-border disabled:opacity-50"><ChevronRight className="h-4 w-4" /></button>
                             </div>
                         </div>
                     )}
@@ -337,8 +392,8 @@ const CompetitorPriceAnalysisReport: React.FC = () => {
              )
             }
             {viewingImage && (
-                <div className="fixed inset-0 bg-black bg-opacity-80 z-[100] flex items-center justify-center p-4" onClick={() => setViewingImage(null)}>
-                    <img src={viewingImage} alt="Competitor Item" className="max-w-full max-h-full rounded-lg" />
+                <div className="fixed inset-0 bg-black bg-opacity-80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setViewingImage(null)}>
+                    <img src={viewingImage} alt="Competitor Item" className="max-w-full max-h-full rounded-lg shadow-2xl animate-in zoom-in duration-200" />
                     <button className="absolute top-4 right-4 p-2 bg-white/20 rounded-full text-white hover:bg-white/40"><X/></button>
                 </div>
             )}
