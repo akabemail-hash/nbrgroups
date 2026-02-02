@@ -1,11 +1,98 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
 import { Seller, Customer, District, SalesRouteReportItem, RotaGroup } from '../../types';
-import { Loader2, Filter, CheckCircle, Circle, ChevronLeft, ChevronRight, X, XCircle, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle, Circle, ChevronLeft, ChevronRight, X, XCircle, AlertTriangle, Clock, Search, ChevronDown, CheckSquare, Square } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 20;
+
+const SingleSelectDropdown: React.FC<{
+    options: { id: string; name: string }[];
+    selectedId: string;
+    onChange: (id: string) => void;
+    label: string;
+    placeholder?: string;
+}> = ({ options, selectedId, onChange, label, placeholder = 'Select option' }) => {
+    const { t } = useAppContext();
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+    
+    const filteredOptions = useMemo(() => {
+        if (!searchTerm) return options;
+        const term = searchTerm.toLowerCase();
+        return options.filter(o => o.name.toLowerCase().includes(term));
+    }, [options, searchTerm]);
+
+    const selectedOption = options.find(o => o.id === selectedId);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <label className="block text-sm font-medium mb-1">{label}</label>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-left flex justify-between items-center text-sm focus:ring-2 focus:ring-primary transition-all"
+            >
+                <span className="truncate">
+                    {selectedOption ? selectedOption.name : placeholder}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {isOpen && (
+                <div className="absolute z-20 w-full bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md mt-1 max-h-72 overflow-hidden shadow-xl flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="p-2 border-b border-border dark:border-dark-border bg-gray-50 dark:bg-gray-800">
+                        <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <input
+                                type="text"
+                                className="w-full pl-8 pr-2 py-1.5 text-xs bg-white dark:bg-gray-900 border border-border dark:border-dark-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                                placeholder={t('relations.searchPlaceholder')}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <div className="overflow-y-auto p-1 flex-1">
+                        <div
+                            onClick={() => { onChange(''); setIsOpen(false); }}
+                            className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded transition-colors"
+                        >
+                            <span className="text-sm truncate text-text-secondary italic">{placeholder} ({t('visitRequestReport.filters.all')})</span>
+                        </div>
+                        {filteredOptions.length === 0 ? (
+                            <div className="p-3 text-xs text-text-secondary italic text-center">No options found</div>
+                        ) : (
+                            filteredOptions.map(option => (
+                                <div
+                                    key={option.id}
+                                    onClick={() => { onChange(option.id); setIsOpen(false); }}
+                                    className={`flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded transition-colors ${selectedId === option.id ? 'bg-primary/10 text-primary font-medium' : 'text-text-primary dark:text-dark-text-primary'}`}
+                                >
+                                    {selectedId === option.id && <CheckCircle className="h-4 w-4 shrink-0" />}
+                                    <span className="text-sm truncate">{option.name}</span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const VisitDetailsModal: React.FC<{ 
     visitId: string; 
@@ -89,7 +176,7 @@ const VisitDetailsModal: React.FC<{
                                                 <img 
                                                     src={visit.before_image_urls[0]} 
                                                     alt="Before" 
-                                                    className="w-full h-24 object-cover rounded-md cursor-pointer hover:opacity-80 border border-border dark:border-dark-border"
+                                                    className="w-full h-24 object-cover rounded-md cursor-pointer hover:opacity-80 border border-border dark:border-dark-border shadow-sm"
                                                     onClick={() => setViewingImage(visit.before_image_urls[0])}
                                                 />
                                             ) : <div className="w-full h-24 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center text-gray-400 text-xs">No Image</div>}
@@ -100,7 +187,7 @@ const VisitDetailsModal: React.FC<{
                                                 <img 
                                                     src={visit.after_image_urls[0]} 
                                                     alt="After" 
-                                                    className="w-full h-24 object-cover rounded-md cursor-pointer hover:opacity-80 border border-border dark:border-dark-border"
+                                                    className="w-full h-24 object-cover rounded-md cursor-pointer hover:opacity-80 border border-border dark:border-dark-border shadow-sm"
                                                     onClick={() => setViewingImage(visit.after_image_urls[0])}
                                                 />
                                             ) : <div className="w-full h-24 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center text-gray-400 text-xs">No Image</div>}
@@ -233,7 +320,7 @@ const SalesRouteReport: React.FC = () => {
              };
              
              if (selectedSellerId) rpcParams.filter_seller_id = selectedSellerId;
-             if (selectedCustomerId) rpcParams.filter_customer_id = selectedCustomerId;
+             if (selectedCustomerId) rpcParams.filter_customer_id = selectedCustomerId; // Fix: Passed as string uuid
              if (selectedDistrictId) rpcParams.filter_district_id = selectedDistrictId;
              if (selectedRotaGroupId) rpcParams.filter_rota_group_id = selectedRotaGroupId;
 
@@ -290,10 +377,10 @@ const SalesRouteReport: React.FC = () => {
 
             {/* Filters */}
              <div className="p-4 bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="lg:col-span-1">
                         <label className="block text-sm font-medium mb-1">{t('visitRequestReport.filters.dateRange')}</label>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-2">
                              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
                              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
                         </div>
@@ -313,11 +400,13 @@ const SalesRouteReport: React.FC = () => {
                          </select>
                     </div>
                     <div>
-                         <label className="block text-sm font-medium mb-1">{t('visitRequestReport.filters.customer')}</label>
-                         <select value={selectedCustomerId} onChange={e => setSelectedCustomerId(e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm">
-                             <option value="">{t('visitRequestReport.filters.all')}</option>
-                             {availableCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                         </select>
+                         <SingleSelectDropdown 
+                            options={availableCustomers}
+                            selectedId={selectedCustomerId}
+                            onChange={setSelectedCustomerId}
+                            label={t('visitRequestReport.filters.customer')}
+                            placeholder="All Customers"
+                         />
                     </div>
                      <div>
                          <label className="block text-sm font-medium mb-1">{t('customers.district')}</label>
@@ -326,19 +415,21 @@ const SalesRouteReport: React.FC = () => {
                              {districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                          </select>
                     </div>
+                </div>
+                <div className="flex justify-between items-end gap-4">
                     <div>
                          <label className="block text-sm font-medium mb-1">{t('salesRouteReport.filters.status')}</label>
-                         <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm">
+                         <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm min-w-[150px]">
                              <option value="all">{t('salesRouteReport.filters.status.all')}</option>
                              <option value="completed">{t('salesRouteReport.filters.status.completed')}</option>
                              <option value="no_visit">{t('salesRouteReport.filters.status.noVisit')}</option>
                              <option value="pending">{t('salesRouteReport.filters.status.pending')}</option>
                          </select>
                     </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                    <button onClick={handleResetFilters} className="px-4 py-2 text-sm font-medium rounded-md border border-border dark:border-dark-border hover:bg-gray-100 dark:hover:bg-gray-800">{t('visitRequestReport.filters.reset')}</button>
-                    <button onClick={handleApplyFilters} className="px-4 py-2 text-sm font-medium text-white bg-primary dark:bg-dark-primary rounded-md hover:bg-secondary dark:hover:bg-dark-secondary">{t('visitRequestReport.filters.apply')}</button>
+                    <div className="flex gap-2">
+                        <button onClick={handleResetFilters} className="px-4 py-2 text-sm font-medium rounded-md border border-border dark:border-dark-border hover:bg-gray-100 dark:hover:bg-gray-800">{t('visitRequestReport.filters.reset')}</button>
+                        <button onClick={handleApplyFilters} className="px-4 py-2 text-sm font-medium text-white bg-primary dark:bg-dark-primary rounded-md hover:bg-secondary dark:hover:bg-dark-secondary">{t('visitRequestReport.filters.apply')}</button>
+                    </div>
                 </div>
             </div>
 
