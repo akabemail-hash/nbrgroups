@@ -331,14 +331,15 @@ const CompetitorPriceAnalysis: React.FC = () => {
                                         <label className="block text-xs font-medium mb-1">{t('competitorPriceAnalysis.productPrice')}</label>
                                         <input type="number" step="0.01" value={item.productPrice} onChange={e => handleItemChange(item.localId, 'productPrice', e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" placeholder="Our Price" />
                                     </div>
+                                     <div className="lg:col-span-3">
+                                        <label className="block text-xs font-medium mb-1">{t('competitorPriceAnalysis.competitorProductName')}</label>
+                                        <input type="text" value={item.competitorProductName} onChange={e => handleItemChange(item.localId, 'competitorProductName', e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
+                                    </div>
                                     <div className="lg:col-span-2">
                                         <label className="block text-xs font-medium mb-1">{t('competitorPriceAnalysis.competitorPrice')}</label>
                                         <input type="number" step="0.01" value={item.competitorPrice} onChange={e => handleItemChange(item.localId, 'competitorPrice', e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
                                     </div>
-                                    <div className="lg:col-span-3">
-                                        <label className="block text-xs font-medium mb-1">{t('competitorPriceAnalysis.competitorProductName')}</label>
-                                        <input type="text" value={item.competitorProductName} onChange={e => handleItemChange(item.localId, 'competitorProductName', e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
-                                    </div>
+                                 
                                     <div className="lg:col-span-2">
                                         <ImageUpload
                                             files={item.photoFiles}
