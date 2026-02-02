@@ -31,7 +31,7 @@ const MultiSelectDropdown: React.FC<{
     }, []);
 
     const selectedCount = selectedIds.size;
-    
+     
     const filteredOptions = useMemo(() => {
         if (!isSearchable || !searchTerm) return options;
         const term = searchTerm.toLowerCase();
