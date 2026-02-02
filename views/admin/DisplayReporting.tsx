@@ -352,6 +352,7 @@ const DisplayReporting: React.FC = () => {
                             selectedIds={selectedCustomerIds} 
                             onChange={handleCustomerToggle} 
                             label={t('displayReporting.filterByCustomer')}
+                            isSearchable={true}
                         />
                     </div>
                     <div className="flex justify-end gap-2 items-end">
