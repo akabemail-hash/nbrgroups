@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
 import { ProductShelf, Customer, Seller, ProductGroup, RotaGroup } from '../../types';
-import { Loader2, ChevronLeft, ChevronRight, X, CheckSquare, Square, ChevronDown, Filter } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, X, CheckSquare, Square, ChevronDown, Filter, Search } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -54,8 +54,12 @@ const MultiSelectDropdown: React.FC<{
     selectedIds: Set<string>;
     onChange: (id: string) => void;
     label: string;
-}> = ({ options, selectedIds, onChange, label }) => {
+    placeholder?: string;
+    isSearchable?: boolean;
+}> = ({ options, selectedIds, onChange, label, placeholder = 'Select options', isSearchable = false }) => {
+    const { t } = useAppContext();
     const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -69,35 +73,70 @@ const MultiSelectDropdown: React.FC<{
     }, []);
 
     const selectedCount = selectedIds.size;
+    
+    const filteredOptions = useMemo(() => {
+        if (!isSearchable || !searchTerm) return options;
+        const term = searchTerm.toLowerCase();
+        return options.filter(o => o.name.toLowerCase().includes(term));
+    }, [options, searchTerm, isSearchable]);
 
     return (
         <div className="relative" ref={dropdownRef}>
             <label className="block text-sm font-medium mb-1">{label}</label>
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-left flex justify-between items-center text-sm"
+                className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-left flex justify-between items-center text-sm focus:ring-2 focus:ring-primary transition-all"
             >
                 <span className="truncate">
-                    {selectedCount === 0 ? 'All Selected Customers' : `${selectedCount} Selected`}
+                    {selectedCount === 0 ? placeholder : `${selectedCount} Selected`}
                 </span>
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             
             {isOpen && (
-                <div className="absolute z-10 w-full bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md mt-1 max-h-60 overflow-y-auto shadow-lg p-2">
-                    {options.length === 0 ? (
-                        <div className="p-2 text-sm text-text-secondary italic">No customers available</div>
-                    ) : (
-                        options.map(option => (
-                            <div
-                                key={option.id}
-                                onClick={() => onChange(option.id)}
-                                className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded-md"
-                            >
-                                {selectedIds.has(option.id) ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-gray-400" />}
-                                <span className="text-sm truncate">{option.name}</span>
+                <div className="absolute z-20 w-full bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md mt-1 max-h-72 overflow-hidden shadow-xl flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
+                    {isSearchable && (
+                        <div className="p-2 border-b border-border dark:border-dark-border bg-gray-50 dark:bg-gray-800">
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    className="w-full pl-8 pr-2 py-1.5 text-xs bg-white dark:bg-gray-900 border border-border dark:border-dark-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder={t('relations.searchPlaceholder')}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    autoFocus
+                                />
                             </div>
-                        ))
+                        </div>
+                    )}
+                    <div className="overflow-y-auto p-1 flex-1">
+                        {filteredOptions.length === 0 ? (
+                            <div className="p-3 text-xs text-text-secondary italic text-center">No options found</div>
+                        ) : (
+                            filteredOptions.map(option => (
+                                <div
+                                    key={option.id}
+                                    onClick={() => onChange(option.id)}
+                                    className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded transition-colors"
+                                >
+                                    {selectedIds.has(option.id) ? (
+                                        <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+                                    ) : (
+                                        <Square className="h-4 w-4 text-gray-400 shrink-0" />
+                                    )}
+                                    <span className="text-sm truncate text-text-primary dark:text-dark-text-primary">{option.name}</span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    {selectedCount > 0 && (
+                        <div className="p-2 bg-gray-50 dark:bg-gray-800 border-t border-border dark:border-dark-border flex justify-between items-center">
+                            <span className="text-[10px] text-text-secondary uppercase font-bold">
+                                {selectedCount} Selected
+                            </span>
+                        </div>
                     )}
                 </div>
             )}
@@ -203,7 +242,6 @@ const ProductShelfReporting: React.FC = () => {
 
             // Product Group Filter (Match by product name list)
             if (selectedProductGroupId) {
-                // Fetch product names in this group
                 const { data: products } = await supabase
                     .from('products')
                     .select('name')
@@ -213,23 +251,18 @@ const ProductShelfReporting: React.FC = () => {
                     const productNames = products.map(p => p.name);
                     query = query.in('product_name', productNames);
                 } else {
-                    // If group has no products, return empty result
                     query = query.in('product_name', ['__NO_PRODUCTS__']);
                 }
             }
 
-            // Customer Filtering Logic (Complex due to Rota Group interaction)
-            // 1. If explicit checkboxes are selected, use them (intersecting with rota if active? usually explicit overrides)
+            // Customer Filtering Logic
             if (selectedCustomerIds.size > 0) {
                  query = query.in('customer_id', Array.from(selectedCustomerIds));
             } 
-            // 2. If no checkboxes, but Rota Group selected, use Rota Group customers
             else if (selectedRotaGroupId && rotaGroupCustomerIds.size > 0) {
                 query = query.in('customer_id', Array.from(rotaGroupCustomerIds));
             }
-            // 3. If Rota Group selected but has no customers, show nothing
             else if (selectedRotaGroupId && rotaGroupCustomerIds.size === 0) {
-                // Force empty result
                 query = query.in('customer_id', ['00000000-0000-0000-0000-000000000000']); 
             }
 
@@ -280,7 +313,6 @@ const ProductShelfReporting: React.FC = () => {
         fetchShelves();
     };
 
-    // Filter available customers in dropdown based on Rota Group
     const availableCustomers = useMemo(() => {
         if (!selectedRotaGroupId) return allCustomers;
         return allCustomers.filter(c => rotaGroupCustomerIds.has(c.id));
@@ -299,8 +331,8 @@ const ProductShelfReporting: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium mb-1">{t('productShelfReporting.filterByDate')}</label>
                         <div className="flex items-center gap-2">
-                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
-                             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
+                             <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setCurrentPage(1); }} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
+                             <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setCurrentPage(1); }} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
                         </div>
                     </div>
                     
@@ -348,6 +380,8 @@ const ProductShelfReporting: React.FC = () => {
                             selectedIds={selectedCustomerIds} 
                             onChange={handleCustomerToggle} 
                             label={t('productShelfReporting.filterByCustomer')}
+                            placeholder="All Selected Customers"
+                            isSearchable={true}
                         />
                     </div>
                     <div className="flex justify-end gap-2 items-end">
