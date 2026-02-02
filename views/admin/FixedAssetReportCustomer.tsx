@@ -1,9 +1,104 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
-import { Customer } from '../../types';
-import { Loader2, ChevronDown, ChevronRight, Image as ImageIcon, X, History, Box } from 'lucide-react';
+import { Customer, RotaGroup } from '../../types';
+import { Loader2, ChevronDown, ChevronRight, Box, Search, CheckSquare, Square, X } from 'lucide-react';
+
+const MultiSelectDropdown: React.FC<{
+    options: { id: string; name: string }[];
+    selectedIds: Set<string>;
+    onChange: (id: string) => void;
+    label: string;
+    placeholder?: string;
+    isSearchable?: boolean;
+}> = ({ options, selectedIds, onChange, label, placeholder = 'Select options', isSearchable = false }) => {
+    const { t } = useAppContext();
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedCount = selectedIds.size;
+    
+    const filteredOptions = useMemo(() => {
+        if (!isSearchable || !searchTerm) return options;
+        const term = searchTerm.toLowerCase();
+        return options.filter(o => o.name.toLowerCase().includes(term));
+    }, [options, searchTerm, isSearchable]);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <label className="block text-sm font-medium mb-1">{label}</label>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-left flex justify-between items-center text-sm focus:ring-2 focus:ring-primary transition-all"
+            >
+                <span className="truncate">
+                    {selectedCount === 0 ? placeholder : `${selectedCount} Selected`}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {isOpen && (
+                <div className="absolute z-20 w-full bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md mt-1 max-h-72 overflow-hidden shadow-xl flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
+                    {isSearchable && (
+                        <div className="p-2 border-b border-border dark:border-dark-border bg-gray-50 dark:bg-gray-800">
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    className="w-full pl-8 pr-2 py-1.5 text-xs bg-white dark:bg-gray-900 border border-border dark:border-dark-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder={t('relations.searchPlaceholder')}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <div className="overflow-y-auto p-1 flex-1">
+                        {filteredOptions.length === 0 ? (
+                            <div className="p-3 text-xs text-text-secondary italic text-center">No options found</div>
+                        ) : (
+                            filteredOptions.map(option => (
+                                <div
+                                    key={option.id}
+                                    onClick={() => onChange(option.id)}
+                                    className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded transition-colors"
+                                >
+                                    {selectedIds.has(option.id) ? (
+                                        <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+                                    ) : (
+                                        <Square className="h-4 w-4 text-gray-400 shrink-0" />
+                                    )}
+                                    <span className="text-sm truncate text-text-primary dark:text-dark-text-primary">{option.name}</span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    {selectedCount > 0 && (
+                        <div className="p-2 bg-gray-50 dark:bg-gray-800 border-t border-border dark:border-dark-border flex justify-between items-center">
+                            <span className="text-[10px] text-text-secondary uppercase font-bold">
+                                {selectedCount} Selected
+                            </span>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const ReportItem: React.FC<{ 
     deliveryItem: any; 
@@ -98,20 +193,52 @@ const FixedAssetReportCustomer: React.FC = () => {
 
     const [groupedItems, setGroupedItems] = useState<Record<string, any[]>>({});
     const [customers, setCustomers] = useState<Customer[]>([]);
+    const [rotaGroups, setRotaGroups] = useState<RotaGroup[]>([]);
+    
     const [loading, setLoading] = useState(true);
     const [viewingImage, setViewingImage] = useState<string | null>(null);
 
     // Filters
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set());
+    const [selectedRotaGroupId, setSelectedRotaGroupId] = useState('');
+    const [rotaGroupCustomerIds, setRotaGroupCustomerIds] = useState<Set<string>>(new Set());
     const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
 
     const fetchDropdowns = useCallback(async () => {
-         const { data, error } = await supabase.from('customers').select('id, name').order('name');
-         if(error) showNotification("Error loading customers", "error");
-         else setCustomers(data as Customer[]);
+         const customersPromise = supabase.from('customers').select('id, name').order('name');
+         const rotaPromise = supabase.from('rota_groups').select('*').order('name');
+         
+         const [custRes, rotaRes] = await Promise.all([customersPromise, rotaPromise]);
+         
+         if(custRes.error) showNotification("Error loading customers", "error");
+         else setCustomers(custRes.data as Customer[]);
+         
+         if(rotaRes.error) console.error("Error loading rota groups", rotaRes.error);
+         else setRotaGroups(rotaRes.data as RotaGroup[]);
     }, [showNotification]);
+
+    // Handle Rota Group Logic
+    useEffect(() => {
+        const fetchRotaCustomers = async () => {
+            if (!selectedRotaGroupId) {
+                setRotaGroupCustomerIds(new Set());
+                return;
+            }
+            const { data, error } = await supabase
+                .from('rota_group_customers')
+                .select('customer_id')
+                .eq('rota_group_id', selectedRotaGroupId);
+            
+            if (error) {
+                console.error("Error fetching rota customers", error);
+            } else {
+                setRotaGroupCustomerIds(new Set(data.map(d => d.customer_id)));
+            }
+        };
+        fetchRotaCustomers();
+    }, [selectedRotaGroupId]);
 
     const fetchData = useCallback(async () => {
         if (!pagePermissions?.can_view) {
@@ -121,8 +248,6 @@ const FixedAssetReportCustomer: React.FC = () => {
         setLoading(true);
         try {
             // Fetch all delivery items (assets)
-            // Note: Filter applies to Delivery Date or we could join Checks. 
-            // For now, let's filter by original delivery date as primary scope.
             let query = supabase
                 .from('fixed_asset_delivery_items')
                 .select(`
@@ -134,7 +259,17 @@ const FixedAssetReportCustomer: React.FC = () => {
 
             if (startDate) query = query.gte('delivery.delivery_date', `${startDate}T00:00:00.000Z`);
             if (endDate) query = query.lte('delivery.delivery_date', `${endDate}T23:59:59.999Z`);
-            if (selectedCustomerId) query = query.eq('delivery.customer_id', selectedCustomerId);
+            
+            // Customer Filter Logic
+            if (selectedCustomerIds.size > 0) {
+                 query = query.in('delivery.customer_id', Array.from(selectedCustomerIds));
+            } else if (selectedRotaGroupId) {
+                 if (rotaGroupCustomerIds.size > 0) {
+                      query = query.in('delivery.customer_id', Array.from(rotaGroupCustomerIds));
+                 } else {
+                      query = query.in('delivery.customer_id', ['00000000-0000-0000-0000-000000000000']);
+                 }
+            }
             
             const { data, error } = await query;
             if (error) throw error;
@@ -154,7 +289,7 @@ const FixedAssetReportCustomer: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [pagePermissions, startDate, endDate, selectedCustomerId, showNotification]);
+    }, [pagePermissions, startDate, endDate, selectedCustomerIds, selectedRotaGroupId, rotaGroupCustomerIds, showNotification]);
 
     useEffect(() => {
         fetchDropdowns();
@@ -172,28 +307,54 @@ const FixedAssetReportCustomer: React.FC = () => {
             return next;
         });
     };
+    
+    const handleCustomerToggle = (id: string) => {
+        const newSet = new Set(selectedCustomerIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedCustomerIds(newSet);
+    };
+
+    const availableCustomers = useMemo(() => {
+        if (!selectedRotaGroupId) return customers;
+        return customers.filter(c => rotaGroupCustomerIds.has(c.id));
+    }, [customers, selectedRotaGroupId, rotaGroupCustomerIds]);
 
     if (!pagePermissions?.can_view) return <p>{t('error.accessDenied.message')}</p>;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20">
             <h1 className="text-3xl font-bold">{t('fixedAssetReportCustomer.title')}</h1>
 
             <div className="p-4 bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">Delivery Date Range</label>
+                        <label className="block text-sm font-medium mb-1">{t('visitRequestReport.filters.dateRange')}</label>
                         <div className="flex gap-2">
-                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 bg-transparent border border-border rounded-md text-sm" />
-                             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 bg-transparent border border-border rounded-md text-sm" />
+                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
+                             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 bg-transparent border border-border dark:border-dark-border rounded-md text-sm" />
                         </div>
                     </div>
+                     <div>
+                         <label className="block text-sm font-medium mb-1">{t('rotaGroups.title')}</label>
+                         <select 
+                            value={selectedRotaGroupId} 
+                            onChange={e => { setSelectedRotaGroupId(e.target.value); setSelectedCustomerIds(new Set()); }} 
+                            className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm"
+                        >
+                            <option value="">{t('visitRequestReport.filters.all')}</option>
+                            {rotaGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                    </div>
                     <div>
-                         <label className="block text-sm font-medium mb-1">{t('fixedAssetReportCustomer.filterByCustomer')}</label>
-                         <select value={selectedCustomerId} onChange={e => setSelectedCustomerId(e.target.value)} className="w-full p-2 bg-surface dark:bg-dark-surface border border-border rounded-md text-sm">
-                             <option value="">All Customers</option>
-                             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                         </select>
+                         <MultiSelectDropdown 
+                            options={availableCustomers}
+                            selectedIds={selectedCustomerIds}
+                            onChange={handleCustomerToggle}
+                            label={t('fixedAssetReportCustomer.filterByCustomer')}
+                            placeholder={t('visitRequestReport.filters.all')}
+                            isSearchable={true}
+                         />
                     </div>
                 </div>
             </div>
