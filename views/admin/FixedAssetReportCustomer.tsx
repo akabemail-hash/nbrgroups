@@ -351,7 +351,7 @@ const FixedAssetReportCustomer: React.FC = () => {
                             options={availableCustomers}
                             selectedIds={selectedCustomerIds}
                             onChange={handleCustomerToggle}
-                            label={t('fixedAssetReportCustomer.filterByCustomer')}
+                           label={t('productShelfReporting.filterByCustomer')}
                             placeholder={t('visitRequestReport.filters.all')}
                             isSearchable={true}
                          />
