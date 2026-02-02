@@ -16,7 +16,7 @@ interface AnalysisItemState {
   competitorProductName: string;
   photoFiles: File[];
 }
-
+ 
 const CompetitorPriceAnalysis: React.FC = () => {
     const { t, profile, permissions, showNotification, activeVisit, navigateTo } = useAppContext();
     const pagePermissions = permissions['Competitor Price Analysis'];
