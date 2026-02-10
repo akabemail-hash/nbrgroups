@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
-import { Customer, CustomerProperty, District } from '../../types';
-import { Plus, Edit, Trash2, X, AlertTriangle, Upload, Download, Loader2, Search, ChevronLeft, ChevronRight, ListFilter } from 'lucide-react';
+import { Customer, CustomerProperty, District, Seller } from '../../types';
+import { Plus, Edit, Trash2, X, AlertTriangle, Upload, Download, Loader2, Search, ChevronLeft, ChevronRight, ListFilter, Filter } from 'lucide-react';
 
 // Tell TypeScript that the XLSX global variable exists
 declare var XLSX: any;
@@ -172,6 +172,7 @@ const CustomerManagement: React.FC = () => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [customerProperties, setCustomerProperties] = useState<CustomerProperty[]>([]);
     const [districts, setDistricts] = useState<District[]>([]);
+    const [sellers, setSellers] = useState<Seller[]>([]); // State for sellers list
     const [loading, setLoading] = useState(true);
     const [isImporting, setIsImporting] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -180,19 +181,22 @@ const CustomerManagement: React.FC = () => {
 
     // Pagination and search state
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedSellerId, setSelectedSellerId] = useState<string>(''); // State for seller filter
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
     const fetchDefinitions = useCallback(async () => {
         try {
-            const [propsResponse, districtsResponse] = await Promise.all([
+            const [propsResponse, districtsResponse, sellersResponse] = await Promise.all([
                 supabase.from('customer_properties').select('*').order('name'),
-                supabase.from('districts').select('*').order('name')
+                supabase.from('districts').select('*').order('name'),
+                supabase.from('sellers').select('*').order('name') // Fetch sellers
             ]);
             
             setCustomerProperties(propsResponse.data || []);
             setDistricts(districtsResponse.data || []);
+            setSellers(sellersResponse.data || []);
         } catch (error) {
             console.error("Error fetching definitions", error);
         }
@@ -208,14 +212,26 @@ const CustomerManagement: React.FC = () => {
             const limit = itemsPerPage === -1 ? 10000 : itemsPerPage;
             const startIndex = (currentPage - 1) * limit;
             
+            // Build query dynamically
+            let selectString = '*, created_by_user:users(full_name), customer_property:customer_properties(name), district:districts(name)';
+            
+            // If filtering by seller, add inner join to relationships table
+            if (selectedSellerId) {
+                selectString += ', customer_seller_relationships!inner(seller_id)';
+            }
+
             let query = supabase
                 .from('customers')
-                .select('*, created_by_user:users(full_name), customer_property:customer_properties(name), district:districts(name)', { count: 'exact' })
+                .select(selectString, { count: 'exact' })
                 .order('name', { ascending: true })
                 .range(startIndex, startIndex + limit - 1);
 
             if (searchTerm) {
                 query = query.or(`name.ilike.%${searchTerm}%,customer_code.ilike.%${searchTerm}%`);
+            }
+
+            if (selectedSellerId) {
+                query = query.eq('customer_seller_relationships.seller_id', selectedSellerId);
             }
             
             const { data, error, count } = await query;
@@ -230,7 +246,7 @@ const CustomerManagement: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [pagePermissions, showNotification, currentPage, searchTerm, itemsPerPage]);
+    }, [pagePermissions, showNotification, currentPage, searchTerm, itemsPerPage, selectedSellerId]);
 
     useEffect(() => {
         if (pagePermissions?.can_view) {
@@ -274,6 +290,12 @@ const CustomerManagement: React.FC = () => {
         const isNewCustomer = !customerData.id;
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { created_by_user, customer_property, district, ...restOfData } = customerData;
+        
+        // Cleanup potential joined data if any slipped through (e.g. customer_seller_relationships from selection)
+        if ('customer_seller_relationships' in restOfData) {
+            delete (restOfData as any)['customer_seller_relationships'];
+        }
+
         const { error } = await supabase.from('customers').upsert(restOfData);
 
         if (error) {
@@ -437,6 +459,24 @@ const CustomerManagement: React.FC = () => {
             ) : (
                 <>
                 <div className="flex flex-col md:flex-row gap-4 mb-4">
+                    <div className="w-full md:w-1/4">
+                         <div className="relative">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <select
+                                value={selectedSellerId}
+                                onChange={(e) => {
+                                    setSelectedSellerId(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="w-full pl-10 pr-4 py-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md focus:ring-2 focus:ring-primary appearance-none"
+                            >
+                                <option value="">{t('visitRequestReport.filters.selectSeller')} ({t('visitRequestReport.filters.all')})</option>
+                                {sellers.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                         </div>
+                    </div>
                     <div className="relative flex-grow">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                         <input
