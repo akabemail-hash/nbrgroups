@@ -1,9 +1,12 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
 import { Seller, Customer, District } from '../../types';
-import { Save, Loader2, Search, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Save, Loader2, Search, ChevronLeft, ChevronRight, Filter, Download, Upload, CheckSquare } from 'lucide-react';
+
+// Tell TypeScript that the XLSX global variable exists
+declare var XLSX: any;
 
 const ITEMS_PER_PAGE = 15;
 
@@ -16,6 +19,7 @@ const CustomerSellerRelations: React.FC = () => {
     const [districts, setDistricts] = useState<District[]>([]);
     const [selectedSellerId, setSelectedSellerId] = useState<string>('');
     const [selectedDistrictId, setSelectedDistrictId] = useState<string>('');
+    const [relationshipFilter, setRelationshipFilter] = useState<'all' | 'selected' | 'unselected'>('all');
     
     // State to hold the original relationships from the DB for the selected seller
     const [associatedCustomerIds, setAssociatedCustomerIds] = useState<Set<string>>(new Set());
@@ -24,11 +28,13 @@ const CustomerSellerRelations: React.FC = () => {
     
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
 
     // New states for search and pagination
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Fetch initial data: all sellers and all customers
     useEffect(() => {
@@ -70,44 +76,55 @@ const CustomerSellerRelations: React.FC = () => {
     }, [pagePermissions, showNotification]);
 
     // Fetch relationships when a seller is selected
+    const fetchRelationships = async () => {
+        if (!selectedSellerId) {
+            setAssociatedCustomerIds(new Set());
+            setCheckedCustomerIds(new Set());
+            return;
+        }
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('customer_seller_relationships')
+                .select('customer_id')
+                .eq('seller_id', selectedSellerId);
+
+            if (error) throw error;
+            
+            // FIX: Explicitly type the Set as Set<string> to resolve TypeScript inference issue.
+            const idSet = new Set<string>((data || []).map(rel => rel.customer_id));
+            setAssociatedCustomerIds(idSet);
+            setCheckedCustomerIds(idSet); // Sync UI checkboxes with DB state
+        } catch (error: any) {
+                console.error("Error fetching relationships:", error);
+                showNotification(error.message || "Failed to load relationships for the selected seller.", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchRelationships = async () => {
-            if (!selectedSellerId) {
-                setAssociatedCustomerIds(new Set());
-                setCheckedCustomerIds(new Set());
-                return;
-            }
-            setLoading(true);
-            try {
-                const { data, error } = await supabase
-                    .from('customer_seller_relationships')
-                    .select('customer_id')
-                    .eq('seller_id', selectedSellerId);
-
-                if (error) throw error;
-                
-                // FIX: Explicitly type the Set as Set<string> to resolve TypeScript inference issue.
-                const idSet = new Set<string>((data || []).map(rel => rel.customer_id));
-                setAssociatedCustomerIds(idSet);
-                setCheckedCustomerIds(idSet); // Sync UI checkboxes with DB state
-            } catch (error: any) {
-                 console.error("Error fetching relationships:", error);
-                 showNotification(error.message || "Failed to load relationships for the selected seller.", "error");
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchRelationships();
     }, [selectedSellerId, showNotification]);
 
     const filteredCustomers = useMemo(() => {
         let result = customers;
         
+        // 1. Filter by Relationship Status
+        if (selectedSellerId) {
+            if (relationshipFilter === 'selected') {
+                result = result.filter(c => checkedCustomerIds.has(c.id));
+            } else if (relationshipFilter === 'unselected') {
+                result = result.filter(c => !checkedCustomerIds.has(c.id));
+            }
+        }
+
+        // 2. Filter by District
         if (selectedDistrictId) {
             result = result.filter(c => c.district_id === selectedDistrictId);
         }
 
+        // 3. Search
         if (searchTerm) {
              const lowercasedFilter = searchTerm.toLowerCase();
              result = result.filter(customer =>
@@ -117,7 +134,7 @@ const CustomerSellerRelations: React.FC = () => {
         }
         
         return result;
-    }, [customers, searchTerm, selectedDistrictId]);
+    }, [customers, searchTerm, selectedDistrictId, relationshipFilter, selectedSellerId, checkedCustomerIds]);
 
     const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
 
@@ -206,6 +223,84 @@ const CustomerSellerRelations: React.FC = () => {
             setIsSaving(false);
         }
     };
+
+    // Excel Import Logic
+    const handleDownloadTemplate = () => {
+        const headers = ["Seller Code", "Customer Code"];
+        const sampleData = ["SELL-001", "CUST-001"];
+        const ws = XLSX.utils.aoa_to_sheet([headers, sampleData]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "SellerRelations");
+        XLSX.writeFile(wb, "Customer_Seller_Relations_Template.xlsx");
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsImporting(true);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+            if (jsonData.length === 0) {
+                throw new Error("The Excel file is empty or has no data.");
+            }
+
+            // Create lookup maps
+            const sellerMap = new Map(sellers.map(s => [s.seller_code.toLowerCase().trim(), s.id]));
+            const customerMap = new Map(customers.map(c => [c.customer_code.toLowerCase().trim(), c.id]));
+
+            const relationsToInsert: any[] = [];
+
+            jsonData.forEach((row: any) => {
+                const sellerCode = String(row["Seller Code"] || '').toLowerCase().trim();
+                const customerCode = String(row["Customer Code"] || '').toLowerCase().trim();
+
+                const sellerId = sellerMap.get(sellerCode);
+                const customerId = customerMap.get(customerCode);
+
+                if (sellerId && customerId) {
+                    relationsToInsert.push({
+                        seller_id: sellerId,
+                        customer_id: customerId,
+                        created_by: profile?.id
+                    });
+                }
+            });
+
+            if (relationsToInsert.length === 0) {
+                throw new Error("No valid relations found. Please check Seller Codes and Customer Codes.");
+            }
+
+            // Perform Insert (ignore duplicates on conflict if standard constraint exists, otherwise might fail)
+            const { error } = await supabase
+                .from('customer_seller_relationships')
+                .upsert(relationsToInsert, { onConflict: 'seller_id,customer_id', ignoreDuplicates: true });
+
+            if (error) throw error;
+
+            showNotification(`${relationsToInsert.length} relationships processed successfully.`, 'success');
+            
+            // Refresh relationships if needed (if the selected seller was involved in import)
+            if (selectedSellerId) {
+                fetchRelationships();
+            }
+
+        } catch (error: any) {
+            console.error("Import failed:", error);
+            showNotification(`Import failed: ${error.message}`, 'error');
+        } finally {
+            setIsImporting(false);
+            if(fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
     
     if (!pagePermissions?.can_view) {
         return <p className="text-text-secondary dark:text-dark-text-secondary">{t('error.accessDenied.message')}</p>
@@ -217,20 +312,35 @@ const CustomerSellerRelations: React.FC = () => {
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-text-primary dark:text-dark-text-primary">{t('relations.title')}</h1>
-                {pagePermissions?.can_edit && selectedSellerId && (
-                     <button 
-                        onClick={handleSave} 
-                        disabled={isSaving}
-                        className="flex items-center px-4 py-2 bg-primary dark:bg-dark-primary text-white rounded-md hover:bg-secondary dark:hover:bg-dark-secondary transition-colors disabled:opacity-50"
-                    >
-                         {isSaving ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Save className="h-5 w-5 mr-2" />}
-                        {isSaving ? 'Saving...' : t('relations.save')}
+                <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={handleDownloadTemplate} className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm">
+                        <Download className="h-4 w-4 mr-2" />
+                        {t('customers.downloadTemplate')}
                     </button>
-                )}
+                    {pagePermissions?.can_edit && (
+                        <>
+                            <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".xlsx, .xls" />
+                            <button onClick={handleImportClick} disabled={isImporting} className="flex items-center px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-wait">
+                                {isImporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                                {isImporting ? 'Importing...' : 'Import Relations'}
+                            </button>
+                        </>
+                    )}
+                    {pagePermissions?.can_edit && selectedSellerId && (
+                         <button 
+                            onClick={handleSave} 
+                            disabled={isSaving}
+                            className="flex items-center px-4 py-2 bg-primary dark:bg-dark-primary text-white rounded-md hover:bg-secondary dark:hover:bg-dark-secondary transition-colors disabled:opacity-50"
+                        >
+                             {isSaving ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Save className="h-5 w-5 mr-2" />}
+                            {isSaving ? 'Saving...' : t('relations.save')}
+                        </button>
+                    )}
+                </div>
             </div>
             
              <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <select 
                         value={selectedSellerId}
                         onChange={e => {
@@ -238,13 +348,13 @@ const CustomerSellerRelations: React.FC = () => {
                             setSearchTerm('');
                             setCurrentPage(1);
                         }}
-                        className="w-full md:w-1/3 p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-text-primary dark:text-dark-text-primary focus:ring-accent dark:focus:ring-dark-accent focus:border-accent dark:focus:border-dark-accent"
+                        className="w-full p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-text-primary dark:text-dark-text-primary focus:ring-accent dark:focus:ring-dark-accent focus:border-accent dark:focus:border-dark-accent"
                     >
                         <option value="">{t('relations.selectSeller')}</option>
                         {sellers.map(seller => <option key={seller.id} value={seller.id}>{seller.name}</option>)}
                     </select>
 
-                    <div className="relative w-full md:w-1/3">
+                    <div className="relative">
                          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                          <select
                             value={selectedDistrictId}
@@ -263,9 +373,29 @@ const CustomerSellerRelations: React.FC = () => {
                             <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                         </div>
                     </div>
+
+                    <div className="relative">
+                         <CheckSquare className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                         <select
+                            value={relationshipFilter}
+                            onChange={(e) => {
+                                setRelationshipFilter(e.target.value as 'all' | 'selected' | 'unselected');
+                                setCurrentPage(1);
+                            }}
+                            className="w-full pl-10 pr-4 p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-text-primary dark:text-dark-text-primary focus:ring-accent dark:focus:ring-dark-accent focus:border-accent dark:focus:border-dark-accent appearance-none"
+                            disabled={!selectedSellerId}
+                        >
+                            <option value="all">Status: {t('visitRequestReport.filters.all')}</option>
+                            <option value="selected">Status: {t('relations.associated')}</option>
+                            <option value="unselected">Status: Unassigned</option>
+                        </select>
+                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
+                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
                 
                     {selectedSellerId && (
-                        <div className="relative w-full md:w-1/3">
+                        <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                             <input
                                 type="text"
