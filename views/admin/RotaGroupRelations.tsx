@@ -507,12 +507,12 @@ const RotaGroupRelations: React.FC = () => {
                         <p className="text-text-secondary dark:text-dark-text-secondary">{t('rotaGroupRelations.noGroupSelected')}</p>
                     </div>
                  ) : (
-                    <div className="bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-border dark:divide-dark-border">
-                                <thead className="bg-gray-50 dark:bg-gray-800">
+                    <div className="bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border overflow-hidden flex flex-col h-[calc(100vh-18rem)]">
+                        <div className="overflow-auto flex-1">
+                            <table className="min-w-full divide-y divide-border dark:divide-dark-border relative">
+                                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                                     <tr>
-                                        <th className="p-4 text-left">
+                                        <th className="p-4 text-left sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">
                                             <input
                                                 type="checkbox"
                                                 className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-primary dark:text-dark-primary focus:ring-accent dark:focus:ring-dark-accent"
@@ -522,9 +522,9 @@ const RotaGroupRelations: React.FC = () => {
                                                 title={t('relations.selectAll')}
                                             />
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t('relations.customerCode')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t('relations.customerName')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t('customers.district')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">{t('relations.customerCode')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">{t('relations.customerName')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">{t('customers.district')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border dark:divide-dark-border">
@@ -557,7 +557,7 @@ const RotaGroupRelations: React.FC = () => {
                             </table>
                         </div>
                         {totalPages > 1 && (
-                            <div className="flex items-center justify-between p-4 border-t border-border dark:border-dark-border">
+                            <div className="flex items-center justify-between p-4 border-t border-border dark:border-dark-border bg-surface dark:bg-dark-surface z-20 relative">
                                 <span className="text-sm text-text-secondary dark:text-dark-text-secondary">
                                     {t('pagination.page').replace('{currentPage}', String(currentPage)).replace('{totalPages}', String(totalPages))}
                                 </span>
