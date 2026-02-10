@@ -3,12 +3,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
 import { Seller, Customer, District } from '../../types';
-import { Save, Loader2, Search, ChevronLeft, ChevronRight, Filter, Download, Upload, CheckSquare } from 'lucide-react';
+import { Save, Loader2, Search, ChevronLeft, ChevronRight, Filter, Download, Upload, CheckSquare, ListFilter } from 'lucide-react';
 
 // Tell TypeScript that the XLSX global variable exists
 declare var XLSX: any;
-
-const ITEMS_PER_PAGE = 15;
 
 const CustomerSellerRelations: React.FC = () => {
     const { t, permissions, showNotification, profile } = useAppContext();
@@ -33,6 +31,7 @@ const CustomerSellerRelations: React.FC = () => {
     // New states for search and pagination
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(15);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,9 +44,7 @@ const CustomerSellerRelations: React.FC = () => {
             }
             setLoading(true);
             try {
-                // Fix: Select all columns to match the 'Seller' type, which requires more fields than just 'id' and 'name'.
                 const sellersPromise = supabase.from('sellers').select('*').order('name');
-                // Fix: Select all columns to match the 'Customer' type, which requires the 'is_active' field among others.
                 const customersPromise = supabase.from('customers').select('*').order('name');
                 const districtsPromise = supabase.from('districts').select('*').order('name');
                 
@@ -91,7 +88,6 @@ const CustomerSellerRelations: React.FC = () => {
 
             if (error) throw error;
             
-            // FIX: Explicitly type the Set as Set<string> to resolve TypeScript inference issue.
             const idSet = new Set<string>((data || []).map(rel => rel.customer_id));
             setAssociatedCustomerIds(idSet);
             setCheckedCustomerIds(idSet); // Sync UI checkboxes with DB state
@@ -136,13 +132,13 @@ const CustomerSellerRelations: React.FC = () => {
         return result;
     }, [customers, searchTerm, selectedDistrictId, relationshipFilter, selectedSellerId, checkedCustomerIds]);
 
-    const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
+    const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
 
     const paginatedCustomers = useMemo(() => {
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIndex = startIndex + ITEMS_PER_PAGE;
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
         return filteredCustomers.slice(startIndex, endIndex);
-    }, [filteredCustomers, currentPage]);
+    }, [filteredCustomers, currentPage, itemsPerPage]);
 
 
     const handleCheckboxChange = (customerId: string, isChecked: boolean) => {
@@ -411,6 +407,39 @@ const CustomerSellerRelations: React.FC = () => {
                     )}
                  </div>
 
+                 {selectedSellerId && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+                         <div className="flex items-center gap-2">
+                             <ListFilter className="h-5 w-5 text-gray-400" />
+                             <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Rows:</span>
+                             <select
+                                value={itemsPerPage}
+                                onChange={(e) => {
+                                    setItemsPerPage(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                className="p-1 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm focus:ring-accent"
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={30}>30</option>
+                                <option value={40}>40</option>
+                                <option value={50}>50</option>
+                                <option value={60}>60</option>
+                                <option value={70}>70</option>
+                                <option value={80}>80</option>
+                                <option value={90}>90</option>
+                                <option value={100}>100</option>
+                                <option value={150}>150</option>
+                                <option value={200}>200</option>
+                                <option value={500}>500</option>
+                            </select>
+                         </div>
+                         <div className="text-sm text-text-secondary dark:text-dark-text-secondary">
+                             {filteredCustomers.length} customers found
+                         </div>
+                    </div>
+                 )}
 
                 {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></div> : 
                  !selectedSellerId ? (
@@ -418,12 +447,12 @@ const CustomerSellerRelations: React.FC = () => {
                         <p className="text-text-secondary dark:text-dark-text-secondary">{t('relations.noSellerSelected')}</p>
                     </div>
                  ) : (
-                    <div className="bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-border dark:divide-dark-border">
-                                <thead className="bg-gray-50 dark:bg-gray-800">
+                    <div className="bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border overflow-hidden flex flex-col h-[calc(100vh-18rem)]">
+                        <div className="overflow-auto flex-1">
+                            <table className="min-w-full divide-y divide-border dark:divide-dark-border relative">
+                                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                                     <tr>
-                                        <th className="p-4 text-left">
+                                        <th className="p-4 text-left sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">
                                             <input
                                                 type="checkbox"
                                                 className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-primary dark:text-dark-primary focus:ring-accent dark:focus:ring-dark-accent"
@@ -433,9 +462,9 @@ const CustomerSellerRelations: React.FC = () => {
                                                 title={t('relations.selectAll')}
                                             />
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t('relations.customerCode')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t('relations.customerName')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t('customers.district')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">{t('relations.customerCode')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">{t('relations.customerName')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 shadow-sm">{t('customers.district')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border dark:divide-dark-border">
@@ -468,7 +497,7 @@ const CustomerSellerRelations: React.FC = () => {
                             </table>
                         </div>
                         {totalPages > 1 && (
-                            <div className="flex items-center justify-between p-4 border-t border-border dark:border-dark-border">
+                            <div className="flex items-center justify-between p-4 border-t border-border dark:border-dark-border bg-surface dark:bg-dark-surface z-20 relative">
                                 <span className="text-sm text-text-secondary dark:text-dark-text-secondary">
                                     {t('pagination.page').replace('{currentPage}', String(currentPage)).replace('{totalPages}', String(totalPages))}
                                 </span>
