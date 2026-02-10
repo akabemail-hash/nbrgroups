@@ -2,13 +2,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { supabase } from '../../services/supabase';
-import { RotaGroup, Customer, District } from '../../types';
-import { Save, Loader2, Search, ChevronLeft, ChevronRight, Filter, Download, Upload, CheckSquare } from 'lucide-react';
+import { RotaGroup, Customer, District, Seller } from '../../types';
+import { Save, Loader2, Search, ChevronLeft, ChevronRight, Filter, Download, Upload, CheckSquare, ListFilter, Users } from 'lucide-react';
 
 // Tell TypeScript that the XLSX global variable exists
 declare var XLSX: any;
-
-const ITEMS_PER_PAGE = 15;
 
 const RotaGroupRelations: React.FC = () => {
     const { t, permissions, showNotification, profile } = useAppContext();
@@ -17,14 +15,19 @@ const RotaGroupRelations: React.FC = () => {
     const [rotaGroups, setRotaGroups] = useState<RotaGroup[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [districts, setDistricts] = useState<District[]>([]);
+    const [sellers, setSellers] = useState<Seller[]>([]);
+    
     const [selectedGroupId, setSelectedGroupId] = useState<string>('');
     const [selectedDistrictId, setSelectedDistrictId] = useState<string>('');
+    const [selectedSellerId, setSelectedSellerId] = useState<string>('');
     const [relationshipFilter, setRelationshipFilter] = useState<'all' | 'selected' | 'unselected'>('all');
     
     // State to hold the original relationships from the DB for the selected group
     const [associatedCustomerIds, setAssociatedCustomerIds] = useState<Set<string>>(new Set());
     // State to hold the UI checkbox states
     const [checkedCustomerIds, setCheckedCustomerIds] = useState<Set<string>>(new Set());
+    // State to hold customers associated with the selected seller
+    const [sellerCustomerIds, setSellerCustomerIds] = useState<Set<string>>(new Set());
     
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -33,6 +36,7 @@ const RotaGroupRelations: React.FC = () => {
     // Search and pagination
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(15);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,20 +52,24 @@ const RotaGroupRelations: React.FC = () => {
                 const groupsPromise = supabase.from('rota_groups').select('*').order('name');
                 const customersPromise = supabase.from('customers').select('*').order('name');
                 const districtsPromise = supabase.from('districts').select('*').order('name');
+                const sellersPromise = supabase.from('sellers').select('*').order('name');
                 
                 const [
                     { data: groupsData, error: groupsError }, 
                     { data: customersData, error: customersError },
-                    { data: districtsData, error: districtsError }
-                ] = await Promise.all([groupsPromise, customersPromise, districtsPromise]);
+                    { data: districtsData, error: districtsError },
+                    { data: sellersData, error: sellersError }
+                ] = await Promise.all([groupsPromise, customersPromise, districtsPromise, sellersPromise]);
 
                 if (groupsError) throw groupsError;
                 if (customersError) throw customersError;
                 if (districtsError) throw districtsError;
+                if (sellersError) throw sellersError;
 
                 setRotaGroups(groupsData || []);
                 setCustomers(customersData || []);
                 setDistricts(districtsData || []);
+                setSellers(sellersData || []);
             } catch (error: any) {
                 console.error("Error fetching initial data:", error);
                 showNotification(error.message || "Failed to load data.", "error");
@@ -104,10 +112,41 @@ const RotaGroupRelations: React.FC = () => {
         fetchRelationships();
     }, [selectedGroupId, showNotification]);
 
+    // Fetch seller customers when a seller is selected
+    useEffect(() => {
+        const fetchSellerCustomers = async () => {
+            if (!selectedSellerId) {
+                setSellerCustomerIds(new Set());
+                return;
+            }
+            // We don't trigger full loading here to allow smoother filtering interaction
+            try {
+                const { data, error } = await supabase
+                    .from('customer_seller_relationships')
+                    .select('customer_id')
+                    .eq('seller_id', selectedSellerId);
+
+                if (error) throw error;
+                const idSet = new Set<string>((data || []).map(rel => rel.customer_id));
+                setSellerCustomerIds(idSet);
+            } catch (error: any) {
+                console.error("Error fetching seller customers:", error);
+                showNotification("Failed to filter by seller.", "error");
+            }
+        };
+
+        fetchSellerCustomers();
+    }, [selectedSellerId, showNotification]);
+
     const filteredCustomers = useMemo(() => {
         let result = customers;
         
-        // 1. Filter by Relationship Status
+        // 1. Filter by Seller
+        if (selectedSellerId) {
+            result = result.filter(c => sellerCustomerIds.has(c.id));
+        }
+
+        // 2. Filter by Relationship Status
         if (selectedGroupId) {
             if (relationshipFilter === 'selected') {
                 result = result.filter(c => checkedCustomerIds.has(c.id));
@@ -116,12 +155,12 @@ const RotaGroupRelations: React.FC = () => {
             }
         }
 
-        // 2. Filter by District
+        // 3. Filter by District
         if (selectedDistrictId) {
             result = result.filter(c => c.district_id === selectedDistrictId);
         }
 
-        // 3. Search
+        // 4. Search
         if (searchTerm) {
              const lowercasedFilter = searchTerm.toLowerCase();
              result = result.filter(customer =>
@@ -131,15 +170,15 @@ const RotaGroupRelations: React.FC = () => {
         }
         
         return result;
-    }, [customers, searchTerm, selectedDistrictId, relationshipFilter, selectedGroupId, checkedCustomerIds]);
+    }, [customers, searchTerm, selectedDistrictId, relationshipFilter, selectedGroupId, checkedCustomerIds, selectedSellerId, sellerCustomerIds]);
 
-    const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
+    const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
 
     const paginatedCustomers = useMemo(() => {
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIndex = startIndex + ITEMS_PER_PAGE;
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
         return filteredCustomers.slice(startIndex, endIndex);
-    }, [filteredCustomers, currentPage]);
+    }, [filteredCustomers, currentPage, itemsPerPage]);
 
 
     const handleCheckboxChange = (customerId: string, isChecked: boolean) => {
@@ -336,7 +375,7 @@ const RotaGroupRelations: React.FC = () => {
             </div>
             
              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <select 
                         value={selectedGroupId}
                         onChange={e => {
@@ -349,6 +388,26 @@ const RotaGroupRelations: React.FC = () => {
                         <option value="">{t('rotaGroupRelations.selectGroup')}</option>
                         {rotaGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}
                     </select>
+
+                    <div className="relative">
+                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <select
+                            value={selectedSellerId}
+                            onChange={(e) => {
+                                setSelectedSellerId(e.target.value);
+                                setCurrentPage(1);
+                            }}
+                            className="w-full pl-10 pr-4 p-2 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-text-primary dark:text-dark-text-primary focus:ring-accent dark:focus:ring-dark-accent focus:border-accent dark:focus:border-dark-accent appearance-none"
+                        >
+                            <option value="">{t('visitRequestReport.filters.selectSeller')}: All</option>
+                            {sellers.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                        </select>
+                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
+                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
 
                     <div className="relative">
                          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -406,7 +465,41 @@ const RotaGroupRelations: React.FC = () => {
                         </div>
                     )}
                  </div>
-
+                 
+                 {/* Second Row for Items Per Page & Stats */}
+                 {selectedGroupId && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+                         <div className="flex items-center gap-2">
+                             <ListFilter className="h-5 w-5 text-gray-400" />
+                             <span className="text-sm text-text-secondary dark:text-dark-text-secondary">Rows:</span>
+                             <select
+                                value={itemsPerPage}
+                                onChange={(e) => {
+                                    setItemsPerPage(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                className="p-1 bg-surface dark:bg-dark-surface border border-border dark:border-dark-border rounded-md text-sm focus:ring-accent"
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={30}>30</option>
+                                <option value={40}>40</option>
+                                <option value={50}>50</option>
+                                <option value={60}>60</option>
+                                <option value={70}>70</option>
+                                <option value={80}>80</option>
+                                <option value={90}>90</option>
+                                <option value={100}>100</option>
+                                <option value={150}>150</option>
+                                <option value={200}>200</option>
+                                <option value={500}>500</option>
+                            </select>
+                         </div>
+                         <div className="text-sm text-text-secondary dark:text-dark-text-secondary">
+                             {filteredCustomers.length} customers found
+                         </div>
+                    </div>
+                 )}
 
                 {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></div> : 
                  !selectedGroupId ? (
