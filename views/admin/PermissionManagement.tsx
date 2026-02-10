@@ -176,12 +176,12 @@ const PermissionManagement: React.FC = () => {
                         </select>
                     </div>
                     {selectedRole && (
-                        <div className="bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border overflow-x-auto">
-                            <table className="min-w-full divide-y divide-border dark:divide-dark-border">
+                        <div className="bg-surface dark:bg-dark-surface rounded-lg shadow-md border border-border dark:border-dark-border overflow-auto max-h-[calc(100vh-16rem)]">
+                            <table className="min-w-full divide-y divide-border dark:divide-dark-border relative">
                                 <thead className="bg-gray-50 dark:bg-gray-800">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t('permissions.pageName')}</th>
-                                        {permissionKeys.map(key => <th key={key as string} className="px-2 py-3 text-center text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">{t(`permissions.${(key as string).substring(4)}`)}</th>)}
+                                        <th className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 px-6 py-3 text-left text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider shadow-sm">{t('permissions.pageName')}</th>
+                                        {permissionKeys.map(key => <th key={key as string} className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 px-2 py-3 text-center text-xs font-medium text-text-secondary dark:text-dark-text-secondary uppercase tracking-wider shadow-sm">{t(`permissions.${(key as string).substring(4)}`)}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border dark:divide-dark-border">
@@ -208,7 +208,7 @@ const PermissionManagement: React.FC = () => {
                                     ))}
                                 </tbody>
                             </table>
-                            {pagePermissions?.can_edit && <div className="p-4 bg-gray-50 dark:bg-gray-800 flex justify-end border-t border-border dark:border-dark-border">
+                            {pagePermissions?.can_edit && <div className="p-4 bg-gray-50 dark:bg-gray-800 flex justify-end border-t border-border dark:border-dark-border sticky bottom-0 z-10">
                                 <button onClick={handleSave} className="px-4 py-2 bg-primary dark:bg-dark-primary text-white text-sm font-medium rounded-md hover:bg-secondary dark:hover:bg-dark-secondary">{t('permissions.save')}</button>
                             </div>}
                         </div>
