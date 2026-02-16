@@ -155,7 +155,7 @@ const FixedAssetForm: React.FC = () => {
             {existingAssets.length === 0 ? (
                 <div className="p-8 text-center bg-surface dark:bg-dark-surface rounded-lg border border-dashed border-border dark:border-dark-border">
                     <Package className="h-12 w-12 mx-auto text-text-secondary mb-3 opacity-30" />
-                    <p className="text-text-secondary">No fixed assets found on record for this customer.</p>
+                    <p className="text-text-secondary">{t('fixedAssetForm.nofixed')}</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
