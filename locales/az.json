@@ -573,5 +573,6 @@
   "notification.customerProperty.added": "Müştəri xüsusiyyəti uğurla əlavə edildi.",
   "notification.customerProperty.updated": "Müştəri xüsusiyyəti uğurla yeniləndi.",
   "notification.customerProperty.deleted": "Müştəri xüsusiyyəti uğurla silindi.",
-  "notification.customerProperty.saveErrorUnique": "Bu adda bir müştəri xüsusiyyəti artıq mövcuddur."
+  "notification.customerProperty.saveErrorUnique": "Bu adda bir müştəri xüsusiyyəti artıq mövcuddur.",
+   "fixedAssetForm.nofixed":"Müştəri de dolab yoktur"
 }
