@@ -129,7 +129,7 @@ const CustomerVisitForm: React.FC = () => {
             };
 
             const roleName = profile?.role?.name;
-            const isSeller = roleName === 'Seller';
+            const isSeller = roleName === 'Satış';
             let tableName: 'seller_visits' | 'merch_visits' = isSeller ? 'seller_visits' : 'merch_visits';
             const roleTable = isSeller ? 'sellers' : 'merchs';
             const roleIdField = isSeller ? 'seller_id' : 'merch_id';
