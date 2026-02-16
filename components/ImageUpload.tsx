@@ -23,6 +23,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
 }) => {
   const { t, showNotification } = useAppContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isPromptOpen, setIsPromptOpen] = useState(false);
 
@@ -36,6 +37,22 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       newPreviews.forEach(url => URL.revokeObjectURL(url));
     };
   }, [files]);
+
+  // Handle click outside to close the popover
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            setIsPromptOpen(false);
+        }
+    };
+
+    if (isPromptOpen) {
+        document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isPromptOpen]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files;
@@ -60,7 +77,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     }
 
     if (Capacitor.isNativePlatform()) {
-        setIsPromptOpen(true);
+        setIsPromptOpen(!isPromptOpen);
     } else {
         fileInputRef.current?.click();
     }
@@ -100,25 +117,65 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     <div className="space-y-4">
       <label className="block text-lg font-semibold">{label}</label>
       
-      <div className="flex space-x-2">
-        <button 
-          type="button" 
-          onClick={initiateSelection}
-          disabled={files.length >= maxFiles}
-          className="flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-md border border-border dark:border-dark-border hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-        >
-          <CameraIcon className="w-4 h-4 mr-2" />
-          <span>{buttonText}</span>
-        </button>
-        
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple={maxFiles > 1}
-          onChange={handleFileSelect}
-          className="hidden"
-        />
+      <div className="relative inline-block" ref={containerRef}>
+        <div className="flex space-x-2">
+            <button 
+            type="button" 
+            onClick={initiateSelection}
+            disabled={files.length >= maxFiles}
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-md border border-border dark:border-dark-border hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+            >
+            <CameraIcon className="w-4 h-4 mr-2" />
+            <span>{buttonText}</span>
+            </button>
+            
+            <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple={maxFiles > 1}
+            onChange={handleFileSelect}
+            className="hidden"
+            />
+        </div>
+
+        {/* Custom Source Selection Popover for Native Devices */}
+        {isPromptOpen && (
+            <div className="absolute top-full left-0 mt-2 z-50 w-64 bg-surface dark:bg-dark-surface rounded-xl shadow-xl border border-border dark:border-dark-border animate-in fade-in zoom-in duration-200">
+                <div className="p-3 border-b border-border dark:border-dark-border">
+                    <h3 className="font-semibold text-sm text-text-primary dark:text-dark-text-primary">{t('common.chooseSource')}</h3>
+                </div>
+                <div className="p-2 space-y-1">
+                    <button 
+                        onClick={() => handleNativeSelect(CameraSource.Camera)}
+                        className="w-full flex items-center p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+                    >
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full mr-3">
+                            <CameraIcon className="w-4 h-4" />
+                        </div>
+                        <span className="font-medium text-sm text-text-primary dark:text-dark-text-primary">{t('common.camera')}</span>
+                    </button>
+                    <button 
+                        onClick={() => handleNativeSelect(CameraSource.Photos)}
+                        className="w-full flex items-center p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+                    >
+                        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full mr-3">
+                            <ImageIcon className="w-4 h-4" />
+                        </div>
+                        <span className="font-medium text-sm text-text-primary dark:text-dark-text-primary">{t('common.gallery')}</span>
+                    </button>
+                </div>
+                {/* Optional Cancel button inside popup if desired, though clicking outside works */}
+                <div className="p-2 border-t border-border dark:border-dark-border">
+                    <button 
+                        onClick={() => setIsPromptOpen(false)}
+                        className="w-full py-2 text-center text-red-500 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors"
+                    >
+                        {t('form.cancel')}
+                    </button>
+                </div>
+            </div>
+        )}
       </div>
 
       {files.length > 0 && (
@@ -146,45 +203,6 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
           {t('imageUpload.maxFilesReached').replace('{maxFiles}', String(maxFiles))}
         </p>
-      )}
-
-      {/* Custom Source Selection Modal for Native Devices */}
-      {isPromptOpen && (
-          <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200">
-              <div className="bg-surface dark:bg-dark-surface w-full max-w-xs rounded-xl shadow-2xl overflow-hidden transform scale-100 transition-all">
-                  <div className="p-4 border-b border-border dark:border-dark-border text-center">
-                      <h3 className="font-semibold text-lg text-text-primary dark:text-dark-text-primary">{t('common.chooseSource')}</h3>
-                  </div>
-                  <div className="p-2 space-y-2">
-                      <button 
-                          onClick={() => handleNativeSelect(CameraSource.Camera)}
-                          className="w-full flex items-center p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      >
-                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full mr-3">
-                              <CameraIcon className="w-5 h-5" />
-                          </div>
-                          <span className="font-medium text-text-primary dark:text-dark-text-primary">{t('common.camera')}</span>
-                      </button>
-                      <button 
-                          onClick={() => handleNativeSelect(CameraSource.Photos)}
-                          className="w-full flex items-center p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      >
-                           <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full mr-3">
-                              <ImageIcon className="w-5 h-5" />
-                          </div>
-                          <span className="font-medium text-text-primary dark:text-dark-text-primary">{t('common.gallery')}</span>
-                      </button>
-                  </div>
-                  <div className="p-2 border-t border-border dark:border-dark-border">
-                      <button 
-                          onClick={() => setIsPromptOpen(false)}
-                          className="w-full py-2 text-center text-red-500 font-medium hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors"
-                      >
-                          {t('form.cancel')}
-                      </button>
-                  </div>
-              </div>
-          </div>
       )}
     </div>
   );
