@@ -795,5 +795,7 @@ export default {
   "fixedAssetForm.photos": "Şəkillər",
   "fixedAssetForm.saveSuccess": "Varlıq təsdiqi yadda saxlanıldı.",
   "fixedAssetForm.validation.selectAsset": "Zəhmət olmasa təsdiqləmək üçün varlıq seçin.",
-  "fixedAssetForm.unknownBrand": "Naməlum Marka"
+  "fixedAssetForm.unknownBrand": "Naməlum Marka",
+     "fixedAssetForm.nofixed":"Müştəri de dolab yoktur"
+
 };
