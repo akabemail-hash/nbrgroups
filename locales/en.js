@@ -537,6 +537,7 @@ export default {
   "notification.fixedAssetBrand.saveErrorUnique": "A brand with this name already exists.",
   "fixedAssetDelivery.title": "Fixed Asset Delivery",
   "fixedAssetDelivery.customer": "Customer",
+ 
   "fixedAssetDelivery.deliveryDate": "Delivery Date & Time",
   "fixedAssetDelivery.gpsCoordinates": "GPS Coordinates",
   "fixedAssetDelivery.description": "Description",
@@ -795,5 +796,6 @@ export default {
   "fixedAssetForm.photos": "Photos",
   "fixedAssetForm.saveSuccess": "Asset verification saved.",
   "fixedAssetForm.validation.selectAsset": "Please select an asset to verify.",
-  "fixedAssetForm.unknownBrand": "Unknown Brand"
+  "fixedAssetForm.unknownBrand": "Unknown Brand",
+   "fixedAssetForm.nofixed":"No fixed assets found on record for this customer."
 };
