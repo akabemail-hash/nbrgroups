@@ -574,5 +574,7 @@
   "notification.customerProperty.added": "Customer property added successfully.",
   "notification.customerProperty.updated": "Customer property updated successfully.",
   "notification.customerProperty.deleted": "Customer property deleted successfully.",
-  "notification.customerProperty.saveErrorUnique": "A customer property with this name already exists."
+  "notification.customerProperty.saveErrorUnique": "A customer property with this name already exists.",
+     "fixedAssetForm.nofixed":"No fixed assets found on record for this customer."
+
 }
