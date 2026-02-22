@@ -12,6 +12,7 @@ const VisitDetailsModal: React.FC<{
 }> = ({ visitId, onClose }) => {
     const { t } = useAppContext();
     const [visit, setVisit] = useState<any>(null);
+    const [visitDetails, setVisitDetails] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewingImage, setViewingImage] = useState<string | null>(null);
 
@@ -28,6 +29,18 @@ const VisitDetailsModal: React.FC<{
                 console.error("Error fetching visit details:", error);
             } else {
                 setVisit(data);
+                if (data.is_visit) {
+                    const { data: detailsData, error: detailsError } = await supabase
+                        .from('visit_product_group_details')
+                        .select('*, product_group:product_groups(name)')
+                        .eq('visit_id', visitId);
+                    
+                    if (detailsError) {
+                        console.error("Error fetching visit product group details:", detailsError);
+                    } else {
+                        setVisitDetails(detailsData || []);
+                    }
+                }
             }
             setLoading(false);
         };
@@ -80,30 +93,81 @@ const VisitDetailsModal: React.FC<{
                                         </div>
                                     )}
 
-                                    <div className="grid grid-cols-2 gap-4 pt-2">
-                                        <div className="text-center">
-                                            <p className="text-xs font-semibold mb-2">{t('dailyPlan.beforeImages')}</p>
-                                            {visit.before_image_urls && visit.before_image_urls.length > 0 ? (
-                                                <img 
-                                                    src={visit.before_image_urls[0]} 
-                                                    alt="Before" 
-                                                    className="w-full h-32 object-cover rounded-md cursor-pointer hover:ring-2 hover:ring-primary transition-all border border-border dark:border-dark-border shadow-sm"
-                                                    onClick={() => setViewingImage(visit.before_image_urls[0])}
-                                                />
-                                            ) : <div className="w-full h-32 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center text-gray-400 text-xs">{t('common.noImage')}</div>}
+                                    {/* Product Group Details */}
+                                    {visitDetails.length > 0 && (
+                                        <div className="space-y-4 pt-2">
+                                            <h4 className="font-bold text-sm uppercase text-text-secondary border-b pb-1">{t('dailyPlan.productGroups')}</h4>
+                                            {visitDetails.map((detail) => (
+                                                <div key={detail.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg border border-border dark:border-dark-border">
+                                                    <h5 className="font-bold text-sm mb-3 text-primary dark:text-dark-primary">{detail.product_group?.name}</h5>
+                                                    
+                                                    <div className="grid grid-cols-2 gap-4 mb-3">
+                                                        <div className="text-center">
+                                                            <span className="text-xs text-text-secondary block mb-1">{t('dailyPlan.beforeImages')}</span>
+                                                            {detail.before_image_url ? (
+                                                                <img 
+                                                                    src={detail.before_image_url} 
+                                                                    alt="Before" 
+                                                                    className="w-full h-24 object-cover rounded-md cursor-pointer hover:opacity-80 border border-border shadow-sm"
+                                                                    onClick={() => setViewingImage(detail.before_image_url)}
+                                                                />
+                                                            ) : (
+                                                                <div className="w-full h-24 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center text-xs text-text-secondary">{t('common.noImage')}</div>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <span className="text-xs text-text-secondary block mb-1">{t('dailyPlan.afterImages')}</span>
+                                                            {detail.after_image_url ? (
+                                                                <img 
+                                                                    src={detail.after_image_url} 
+                                                                    alt="After" 
+                                                                    className="w-full h-24 object-cover rounded-md cursor-pointer hover:opacity-80 border border-border shadow-sm"
+                                                                    onClick={() => setViewingImage(detail.after_image_url)}
+                                                                />
+                                                            ) : (
+                                                                <div className="w-full h-24 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center text-xs text-text-secondary">{t('common.noImage')}</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {detail.notes && (
+                                                        <div className="mt-2">
+                                                            <span className="text-xs font-bold text-text-secondary block mb-1">{t('form.notes')}</span>
+                                                            <p className="text-sm bg-white dark:bg-gray-900 p-2 rounded border border-border dark:border-dark-border italic">{detail.notes}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
-                                        <div className="text-center">
-                                            <p className="text-xs font-semibold mb-2">{t('dailyPlan.afterImages')}</p>
-                                            {visit.after_image_urls && visit.after_image_urls.length > 0 ? (
-                                                <img 
-                                                    src={visit.after_image_urls[0]} 
-                                                    alt="After" 
-                                                    className="w-full h-32 object-cover rounded-md cursor-pointer hover:ring-2 hover:ring-primary transition-all border border-border dark:border-dark-border shadow-sm"
-                                                    onClick={() => setViewingImage(visit.after_image_urls[0])}
-                                                />
-                                            ) : <div className="w-full h-32 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center text-gray-400 text-xs">{t('common.noImage')}</div>}
+                                    )}
+
+                                    {/* General Visit Images (Legacy or Overview) */}
+                                    {(visit.before_image_urls?.length > 0 || visit.after_image_urls?.length > 0) && (
+                                        <div className="grid grid-cols-2 gap-4 pt-2 border-t mt-4">
+                                            <div className="text-center">
+                                                <p className="text-xs font-semibold mb-2">{t('dailyPlan.beforeImages')} (General)</p>
+                                                {visit.before_image_urls && visit.before_image_urls.length > 0 ? (
+                                                    <img 
+                                                        src={visit.before_image_urls[0]} 
+                                                        alt="Before" 
+                                                        className="w-full h-32 object-cover rounded-md cursor-pointer hover:ring-2 hover:ring-primary transition-all border border-border dark:border-dark-border shadow-sm"
+                                                        onClick={() => setViewingImage(visit.before_image_urls[0])}
+                                                    />
+                                                ) : <div className="w-full h-32 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center text-gray-400 text-xs">{t('common.noImage')}</div>}
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-xs font-semibold mb-2">{t('dailyPlan.afterImages')} (General)</p>
+                                                {visit.after_image_urls && visit.after_image_urls.length > 0 ? (
+                                                    <img 
+                                                        src={visit.after_image_urls[0]} 
+                                                        alt="After" 
+                                                        className="w-full h-32 object-cover rounded-md cursor-pointer hover:ring-2 hover:ring-primary transition-all border border-border dark:border-dark-border shadow-sm"
+                                                        onClick={() => setViewingImage(visit.after_image_urls[0])}
+                                                    />
+                                                ) : <div className="w-full h-32 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center text-gray-400 text-xs">{t('common.noImage')}</div>}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </>
                             ) : (
                                 <div className="space-y-4">
