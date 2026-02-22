@@ -202,6 +202,7 @@ const CustomerVisitForm: React.FC = () => {
             // Mark as saved in context so Daily Plan knows it's safe to end
             if (savedVisitId) {
                 markVisitAsSaved(savedVisitId);
+                setTimeout(() => navigateTo('/daily-plan'), 100);
             }
             
         } catch (error: any) {
