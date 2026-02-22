@@ -376,12 +376,22 @@ const DailyPlan: React.FC = () => {
                              <p className="text-sm text-blue-600 dark:text-blue-300">{activeVisit.customerName}</p>
                          </div>
                     </div>
-                    <button 
-                        onClick={handleContinueVisit}
-                        className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 transition-colors shadow-md text-sm flex items-center gap-2"
-                    >
-                         {t('dailyPlan.action.continue')} <ChevronRight className="h-4 w-4" />
-                    </button>
+                    {activeVisit.isSaved ? (
+                        <button 
+                            onClick={handleEndVisit}
+                            className="px-4 py-2 bg-red-600 text-white font-bold rounded-md hover:bg-red-700 transition-colors shadow-md text-sm flex items-center gap-2"
+                        >
+                             <LogOut className="h-4 w-4" />
+                             {t('dailyPlan.action.end')}
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={handleContinueVisit}
+                            className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 transition-colors shadow-md text-sm flex items-center gap-2"
+                        >
+                             {t('dailyPlan.action.continue')} <ChevronRight className="h-4 w-4" />
+                        </button>
+                    )}
                 </div>
             )}
             
